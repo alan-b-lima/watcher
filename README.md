@@ -4,9 +4,9 @@ Watcher is a simple command line tool that runs some command if it identifies ch
 
 ## Installation
 
-You can install watcher using the `go get` command:
+You can install watcher using the `go install` command:
 
-    go get github.com/alan-b-lima/watcher
+    go install github.com/alan-b-lima/watcher@latest
 
 ## Usage
 
