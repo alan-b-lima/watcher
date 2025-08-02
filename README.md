@@ -31,13 +31,12 @@ You can install watcher using the `go install` command:
     ( --tick-speed | -t ) <milliseconds> - defines the wait time in between watches.
     ( --exec | -e ) <command> [ <args> ] - command to be executed when changes are detected.
 
-
 ## Examples
 
     watcher . --ignore .git node_modules .gitignore -t 1000 --exec build.sh
 
 Watches for changes every second (-t 1000) on the current directory (.), except for the .git and node_modules directories and the .gitignore file. If any changes are detected, build.sh is run and its output will be displayed on the standard output.
 
-    watcher src --tick-speed 3000 -e "go test -v ./..."
+    watcher src --tick-speed 3000 -e go test -v ./...
 
 Watches for changes every three second (--tick-speed 3000) in the src directory and runs `go test -v ./...` whenever a change is detected.
