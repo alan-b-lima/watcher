@@ -6,10 +6,12 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/alan-b-lima/watcher/ansi-escape"
@@ -43,6 +45,7 @@ var (
 	errFailedToParseMilliseconds = errors.New("given milliseconds failed to be parsed as a number")
 	errTickSpeedNonPositive      = errors.New("tick speed must be positive")
 	errTickSpeedGranAlreadySet   = errors.New("the tick speed has already been set")
+	errUnsupportedOS             = func(os string) error { return unsupportedOSError{fmt.Errorf("unsupported OS: %s", os)} }
 )
 
 type flagState struct {
@@ -66,6 +69,10 @@ func main() {
 		return
 	}
 	defer ansi.DisableVirtualTerminal(os.Stdout.Fd())
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	defer close(signals)
 
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
@@ -98,24 +105,29 @@ func main() {
 	ticker := time.NewTicker(fls.gran)
 	defer ticker.Stop()
 
-	for range ticker.C {
-
-		latestModTime, filename, err := fls.findLatestChange()
-		if err != nil {
-			fmt.Println(err)
+	for {
+		select {
+		case <-signals:
 			return
-		}
 
-		if !latestModTime.After(currentLatestModTime) {
-			fmt.Printf("[\033[90m%s\033[m]\r", time.Now().Format(time.DateTime))
-			continue
-		}
+		case <-ticker.C:
+			latestModTime, filename, err := fls.findLatestChange()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 
-		if ok := fls.executeAndHandle(filename); !ok {
-			return
-		}
+			if !latestModTime.After(currentLatestModTime) {
+				fmt.Printf("[\033[90m%s\033[m]\r", time.Now().Format(time.DateTime))
+				continue
+			}
 
-		currentLatestModTime = latestModTime
+			if ok := fls.executeAndHandle(filename); !ok {
+				return
+			}
+
+			currentLatestModTime = latestModTime
+		}
 	}
 }
 
@@ -135,7 +147,6 @@ func processFlags(args []string) (flagState, error) {
 		}
 
 		switch currentFlag {
-
 		case flagWatch:
 			fls.watch = append(fls.watch, arg)
 
@@ -280,10 +291,9 @@ func (fls *flagState) executeAndHandle(filename string) bool {
 		if code := err.ExitCode(); code != 0 {
 			fmt.Printf("\nexited with code \033[33m%d\033[m\n", code)
 		}
-
-		fmt.Print("\n")
 	}
 
+	fmt.Print("\n")
 	return true
 }
 
@@ -296,7 +306,7 @@ func (fls *flagState) execute() error {
 	case "darwin", "linux":
 		cmd = exec.Command("/bin/sh", "-c", strings.Join(fls.exec, " "))
 	default:
-		return unsupportedOSError{fmt.Errorf("unsupported OS: %s", runtime.GOOS)}
+		return errUnsupportedOS(runtime.GOOS)
 	}
 
 	cmd.Stdin = os.Stdin
